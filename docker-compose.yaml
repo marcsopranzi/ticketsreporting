@@ -1,4 +1,5 @@
 version: '3.8'
+
 x-airflow-common: &airflow-common
   build:
     context: .
@@ -9,6 +10,13 @@ x-airflow-common: &airflow-common
     - AIRFLOW__CELERY__BROKER_URL=redis://@redis:6379/0
     - AIRFLOW__CELERY__RESULT_BACKEND=db+postgresql://admin:password@postgres:5432/airflowdb
     - AIRFLOW__CORE__LOAD_EXAMPLES=false
+    - DB_HOST=postgres
+    - DB_PORT=5432
+    - REDIS_PORT=6379
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./tickets_dbt:/opt/airflow/tickets_dbt
+    - ./logs:/opt/airflow/logs
   depends_on:
     - postgres
     - redis
@@ -20,7 +28,6 @@ services:
     environment:
       POSTGRES_USER: admin
       POSTGRES_PASSWORD: password
-      # We create multiple DBs using an init script usually, but let's use one for PoC
       POSTGRES_DB: airflowdb 
     ports:
       - "5432:5432"
@@ -67,25 +74,28 @@ services:
   # --- AIRFLOW CELERY CLUSTER ---
   airflow-init:
     <<: *airflow-common
-    command: version
-    environment:
-      - _AIRFLOW_DB_UPGRADE=true
-      - _AIRFLOW_WWW_USER_CREATE=true
-      - _AIRFLOW_WWW_USER_USERNAME=admin
-      - _AIRFLOW_WWW_USER_PASSWORD=admin
+    # Force the explicit migration and user creation to guarantee the DB is ready
+    command: bash -c "airflow db migrate && airflow users create --role Admin --username admin --email admin@example.com --firstname Admin --lastname User --password admin || true"
 
   airflow-webserver:
     <<: *airflow-common
     command: webserver
     ports:
-      - "8080:8080"
+      - "8085:8080" # <-- CHANGED TO 8085
     depends_on:
-      - airflow-init
+      airflow-init:
+        condition: service_completed_successfully # <-- Waits for init to finish!
 
   airflow-scheduler:
     <<: *airflow-common
     command: scheduler
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
 
   airflow-worker:
     <<: *airflow-common
-    command: celery worker
+    command: celery worker -H worker@%h
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully

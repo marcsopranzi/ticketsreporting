@@ -1,8 +1,15 @@
 .PHONY: build post-data down logs
 
-# 1. Bake the fresh Python images and start the cluster
+# 1. Bake the fresh Python images, start the cluster, and handle the Postgres race condition
 build:
-	docker compose up -d --build
+	# Start the base infra and the init container
+	docker compose up -d --build postgres redis redpanda clickhouse airflow-init api
+	@echo "Waiting for Airflow database migrations to finish..."
+	sleep 15
+	# Now start the 'muscle' of Airflow once the metadata DB is ready
+	docker compose up -d airflow-webserver airflow-scheduler airflow-worker
+	docker compose up -d api
+	@echo "All systems GO. Access Airflow at http://localhost:8085"
 
 # 2. Fire a test ticket into the API
 post-data:
