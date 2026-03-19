@@ -1,0 +1,19 @@
+version: 2
+
+sources:
+  - name: postgres_raw
+    database: airflowdb
+    schema: public
+    tables:
+      - name: raw_tickets
+        columns:
+          - name: transaction_id
+            tests:
+              - unique
+              - not_null
+          - name: event_name
+            tests:
+              - not_null
+          - name: user_id
+            tests:
+              - not_null
