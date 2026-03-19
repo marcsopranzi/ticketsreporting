@@ -1,0 +1,11 @@
+FROM apache/airflow:2.8.2-python3.11
+
+USER root
+RUN apt-get update && apt-get install -y git && apt-get clean
+
+USER airflow
+# Install dbt for Postgres and Clickhouse, plus Kafka for any Python triggers
+RUN pip install --no-cache-dir \
+    dbt-postgres \
+    dbt-clickhouse \
+    kafka-python
